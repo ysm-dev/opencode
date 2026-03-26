@@ -461,7 +461,11 @@ export namespace Session {
 
   export const diff = fn(SessionID.zod, async (sessionID) => {
     try {
-      return await Storage.read<Snapshot.FileDiff[]>(["session_diff", sessionID])
+      const value = await Storage.read<unknown>(["session_diff", sessionID])
+      const result = Snapshot.FileDiff.array().safeParse(value)
+      if (result.success) return result.data
+      Storage.write(["session_diff", sessionID], []).catch(() => {})
+      return []
     } catch {
       return []
     }

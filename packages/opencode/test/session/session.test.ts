@@ -6,6 +6,8 @@ import { Log } from "../../src/util/log"
 import { Instance } from "../../src/project/instance"
 import { MessageV2 } from "../../src/session/message-v2"
 import { MessageID, PartID } from "../../src/session/schema"
+import { Storage } from "../../src/storage/storage"
+import { SessionSummary } from "../../src/session/summary"
 
 const projectRoot = path.join(__dirname, "../..")
 Log.init({ print: false })
@@ -139,4 +141,25 @@ describe("step-finish token propagation via Bus event", () => {
     },
     { timeout: 30000 },
   )
+})
+
+describe("session diffs", () => {
+  test("ignores malformed stored diffs", async () => {
+    await Instance.provide({
+      directory: projectRoot,
+      fn: async () => {
+        const session = await Session.create({})
+
+        await Storage.write(["session_diff", session.id], { nope: true })
+        expect(await Session.diff(session.id)).toEqual([])
+
+        await Storage.write(["session_diff", session.id], { nope: true })
+        expect(await SessionSummary.diff({ sessionID: session.id })).toEqual([])
+        const stored = await Storage.read<unknown>(["session_diff", session.id])
+        expect(stored).toEqual([])
+
+        await Session.remove(session.id)
+      },
+    })
+  })
 })

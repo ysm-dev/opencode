@@ -126,7 +126,10 @@ export namespace SessionSummary {
       messageID: MessageID.zod.optional(),
     }),
     async (input) => {
-      const diffs = await Storage.read<Snapshot.FileDiff[]>(["session_diff", input.sessionID]).catch(() => [])
+      const value = await Storage.read<unknown>(["session_diff", input.sessionID]).catch(() => [])
+      const result = Snapshot.FileDiff.array().safeParse(value)
+      const diffs = result.success ? result.data : []
+      if (!result.success) Storage.write(["session_diff", input.sessionID], []).catch(() => {})
       const next = diffs.map((item) => {
         const file = unquoteGitPath(item.file)
         if (file === item.file) return item

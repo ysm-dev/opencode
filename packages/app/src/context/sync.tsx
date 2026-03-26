@@ -11,13 +11,27 @@ import {
 } from "./global-sync/session-prefetch"
 import { useGlobalSync } from "./global-sync"
 import { useSDK } from "./sdk"
-import type { Message, Part } from "@opencode-ai/sdk/v2/client"
+import type { FileDiff, Message, Part } from "@opencode-ai/sdk/v2/client"
 import { SESSION_CACHE_LIMIT, dropSessionCaches, pickSessionCacheEvictions } from "./global-sync/session-cache"
 
 const SKIP_PARTS = new Set(["patch", "step-start", "step-finish"])
 
 function sortParts(parts: Part[]) {
   return parts.filter((part) => !!part?.id).sort((a, b) => cmp(a.id, b.id))
+}
+
+function diffs(input: unknown): FileDiff[] {
+  if (!Array.isArray(input)) return []
+  return input.filter((item): item is FileDiff => {
+    if (!item || typeof item !== "object") return false
+    if (!("file" in item) || typeof item.file !== "string") return false
+    if (!("before" in item) || typeof item.before !== "string") return false
+    if (!("after" in item) || typeof item.after !== "string") return false
+    if (!("additions" in item) || typeof item.additions !== "number") return false
+    if (!("deletions" in item) || typeof item.deletions !== "number") return false
+    if (!("status" in item) || item.status === undefined) return true
+    return item.status === "added" || item.status === "deleted" || item.status === "modified"
+  })
 }
 
 function runInflight(map: Map<string, Promise<void>>, key: string, task: () => Promise<void>) {
@@ -510,7 +524,7 @@ export const { use: useSync, provider: SyncProvider } = createSimpleContext({
           return runInflight(inflightDiff, key, () =>
             retry(() => client.session.diff({ sessionID })).then((diff) => {
               if (!tracked(directory, sessionID)) return
-              setStore("session_diff", sessionID, reconcile(diff.data ?? [], { key: "file" }))
+              setStore("session_diff", sessionID, reconcile(diffs(diff.data), { key: "file" }))
             }),
           )
         },
